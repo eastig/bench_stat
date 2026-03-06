@@ -64,6 +64,170 @@ report = mod.generate_report(baseline, experiment, 'Baseline', 'Experiment', alp
 print(report)
 ```
 
+## Example Output
+
+### Single Dataset Analysis
+
+```
+========================================================================
+  BENCHMARK ANALYSIS REPORT
+  baseline.data
+  Higher is better
+========================================================================
+
+────────────────────────────────────────────────────────────────────────
+  DESCRIPTIVE STATISTICS
+────────────────────────────────────────────────────────────────────────
+  Metric                               Value
+  ────────────────────  ────────────────────
+  n                                       58
+  Mean                               1054.53
+  Std Dev                              12.24
+  Std Error                             1.61
+  Median                             1054.37
+  Min                                1030.72
+  Max                                1089.65
+  Range                                58.93
+  25th pct (Q1)                      1045.79
+  75th pct (Q3)                      1059.70
+  IQR                                  13.91
+  Skewness                             0.633
+  Ex. Kurtosis                         0.712
+  95% CI (mean)           [1051.31, 1057.75]
+
+  Coefficient of Variation: 1.16%
+    → Low variability — reasonably consistent results
+
+────────────────────────────────────────────────────────────────────────
+  FREQUENCY HISTOGRAM
+────────────────────────────────────────────────────────────────────────
+  baseline.data
+  ops/min           Frequency
+  [1030.7,1037.3) │ ████████████                               4
+  [1037.3,1043.8) │ █████████████████████                      7
+  [1043.8,1050.4) │ █████████████████████████████████         11
+  [1050.4,1056.9) │ ████████████████████████████████████      12  ← mean (1054.53)
+  [1056.9,1063.5) │ ████████████████████████████████████████  13  ← mode
+  [1063.5,1070.0) │ ███████████████                            5
+  [1070.0,1076.6) │ █████████                                  3
+  [1076.6,1083.1) │ ███                                        1
+  [1083.1,1089.7) │ ██████                                     2
+                  └─────────────────────────────────────────────
+                    Mean = 1054.53  Std = 12.24  n = 58
+
+  ... (normality assessment, outlier detection, stability chart) ...
+
+────────────────────────────────────────────────────────────────────────
+  SUMMARY
+────────────────────────────────────────────────────────────────────────
+  Benchmark: baseline.data
+  Result:    1054.53 ± 12.24 ops/min (mean ± std)
+  95% CI:    [1051.31, 1057.75] ops/min
+  CV:        1.16%
+  Outliers:  2 (IQR method)
+  Normal:    Yes (p = 0.0667)
+
+  Recommendations:
+  ⚠️  2 outlier(s) detected — consider investigating whether they
+      represent real behavior or measurement errors
+
+========================================================================
+```
+
+### Two-Dataset Comparison
+
+```
+========================================================================
+  BENCHMARK COMPARISON REPORT
+  baseline.data (baseline) vs. fix.data (experiment)
+  Higher is better
+========================================================================
+
+────────────────────────────────────────────────────────────────────────
+  DESCRIPTIVE STATISTICS
+────────────────────────────────────────────────────────────────────────
+  Metric           baseline.data   fix.data
+  ───────────────  ───────────────  ───────────────
+  n                             58               58
+  Mean                     1054.53          1059.45
+  Median                   1054.37          1059.66
+  Std Dev                    12.24            11.96
+  Min                      1030.72          1028.77
+  Max                      1089.65          1090.31
+  25th pct                 1045.79          1051.51
+  75th pct                 1059.70          1068.27
+  Skewness                   0.633            0.047
+  Ex. Kurtosis               0.712            0.094
+
+  Observed difference: +4.92 (+0.47%)
+  Direction: ✅ Improvement
+
+  ... (histograms, normality assessment) ...
+
+────────────────────────────────────────────────────────────────────────
+  STATISTICAL TESTS
+────────────────────────────────────────────────────────────────────────
+  Hypothesis: fix.data > baseline.data
+  Significance level: α = 0.05
+
+  Test                  Statistic                  p (1-tail)  p (2-tail)        Significant?
+  ────────────────────  ─────────────────────────  ──────────  ──────────  ──────────────────
+  Welch's t-test        t=2.191, df=113.9              0.0152      0.0305               ✅ Yes
+  Mann-Whitney U        U=1254, z=2.363                0.0091      0.0181               ✅ Yes
+  Permutation test      δ=4.92                         0.0156      0.0312               ✅ Yes
+  Bootstrap             CI=[0.47, 9.18]                0.0132      0.0264               ✅ Yes
+
+  Cohen's d: 0.407 (Small)
+    Interpretation: The means are 0.41 pooled standard deviations apart.
+    Win probability: A random fix.data value beats a random
+    baseline.data value ~61% of the time.
+
+  p-value visual summary (one-tailed):
+
+  Test                  p-value  0.00  0.01  0.02  0.03  0.04  0.05
+                                 │     │     │     │     │     │
+  Welch's t-test         0.0152  │         ▓
+  Mann-Whitney U         0.0091  │     ▓
+  Permutation test       0.0156  │         ▓
+  Bootstrap              0.0132  │       ▓
+                                 │                              α=0.0500
+
+  ... (power analysis) ...
+
+────────────────────────────────────────────────────────────────────────
+  CUMULATIVE COMPARISON
+────────────────────────────────────────────────────────────────────────
+  Percentage of values ≥ threshold:
+
+   Threshold  baseline.data   fix.data  Difference           Better
+  ──────────  ───────────────  ───────────────  ──────────  ───────────────
+      ≥ 1030             100%              98%         -2%           ≈ tie
+      ≥ 1036              95%              98%         +3%  fix.data
+      ≥ 1042              86%              97%        +10%  fix.data
+      ≥ 1048              69%              79%        +10%  fix.data
+      ≥ 1055              47%              62%        +16%  fix.data
+      ≥ 1061              22%              43%        +21%  fix.data
+      ≥ 1067              14%              31%        +17%  fix.data
+      ≥ 1073               9%              12%         +3%  fix.data
+      ≥ 1079               3%               3%         +0%           ≈ tie
+
+────────────────────────────────────────────────────────────────────────
+  VERDICT
+────────────────────────────────────────────────────────────────────────
+  Tests significant at α=0.05: 4/4
+  Mean difference: +4.92 (+0.47%)
+  Cohen's d: 0.407 (Small)
+  Bootstrap 95% CI: [0.47, 9.18]
+
+  ✅ SIGNIFICANT IMPROVEMENT: fix.data is significantly better
+     than baseline.data.
+
+  Practical significance: SMALL — real but modest improvement.
+     Consider code quality and other factors.
+
+========================================================================
+```
+
 ## Project Structure
 
 ```
