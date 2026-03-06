@@ -240,7 +240,7 @@ def _format_stats_comparison(stats_base, stats_exp, label_base, label_exp):
 # Distribution Shape Interpretation
 # =============================================================================
 
-def interpret_cv(cv):
+def _interpret_cv(cv):
     """Return interpretation line for coefficient of variation."""
     if cv < 1:
         return "    \u2192 Very low variability \u2014 highly consistent results"
@@ -301,7 +301,7 @@ def _normality_assessment(datasets, labels, edges, alpha, stats_list=None):
 
     for i, (data, label) in enumerate(zip(datasets, labels)):
         stats = stats_list[i] if stats_list else None
-        lines.append(normality_histogram(data, label, edges, max_bar_width=20, stats=stats))
+        lines.append(_normality_histogram(data, label, edges, max_bar_width=20, stats=stats))
 
     # D'Agostino-Pearson test results
     results = []
@@ -349,7 +349,7 @@ def _normality_assessment(datasets, labels, edges, alpha, stats_list=None):
 # =============================================================================
 
 
-def format_outlier_report(stats, outliers_iqr, outliers_zscore):
+def _format_outlier_report(stats, outliers_iqr, outliers_zscore):
     """Format outlier detection results."""
     p25 = stats['p25']
     p75 = stats['p75']
@@ -1152,7 +1152,7 @@ def _single_histogram(data, label, edges, bar_char='\u2588', max_bar_width=40, s
     return '\n'.join(lines)
 
 
-def normality_histogram(data, label, edges, max_bar_width=20, stats=None):
+def _normality_histogram(data, label, edges, max_bar_width=20, stats=None):
     """Generate histogram comparing actual vs expected normal distribution.
 
     If stats is provided (from compute_descriptive_stats), pre-computed mean and
@@ -1202,7 +1202,7 @@ def normality_histogram(data, label, edges, max_bar_width=20, stats=None):
     return '\n'.join(lines)
 
 
-def overlay_histogram(data1, data2, label1, label2, edges,
+def _overlay_histogram(data1, data2, label1, label2, edges,
                       max_bar_width=50):
     """Generate side-by-side overlay histogram."""
     counts1 = _bin_data(data1, edges)
@@ -1240,7 +1240,7 @@ def overlay_histogram(data1, data2, label1, label2, edges,
     return '\n'.join(lines)
 
 
-def shape_ascii_art(data, edges, width=20, height=5):
+def _shape_ascii_art(data, edges, width=20, height=5):
     """Generate a small ASCII art shape of the distribution."""
     counts = _bin_data(data, edges)
     if not counts:
@@ -1281,7 +1281,7 @@ def _distribution_shape_comparison(datasets, labels, edges,
     """Generate side-by-side ASCII art distribution shapes."""
     arts = []
     for data in datasets:
-        arts.append(shape_ascii_art(data, edges, art_width, art_height))
+        arts.append(_shape_ascii_art(data, edges, art_width, art_height))
 
     lines = []
     header = ""
@@ -1543,7 +1543,7 @@ def generate_single_report(data, label, higher_is_better=True, alpha=0.05):
     cv = 100.0 * s / abs(m) if m != 0 else float('inf')
     if m != 0:
         report.append("  Coefficient of Variation: {:.2f}%".format(cv))
-        report.append(interpret_cv(cv))
+        report.append(_interpret_cv(cv))
     else:
         report.append("  Coefficient of Variation: N/A (mean is zero)")
     report.append("")
@@ -1578,7 +1578,7 @@ def generate_single_report(data, label, higher_is_better=True, alpha=0.05):
         data, stats['p25'], stats['p75'], stats['iqr'])
     outliers_zscore = detect_outliers_zscore(
         data, stats['mean'], stats['stdev'])
-    report.extend(format_outlier_report(stats, outliers_iqr, outliers_zscore))
+    report.extend(_format_outlier_report(stats, outliers_iqr, outliers_zscore))
 
     # -- Stability --
     _append_report_section(report, "STABILITY ANALYSIS")
@@ -1782,7 +1782,7 @@ def generate_report(data_base, data_exp, label_base, label_exp,
 
     # -- Overlay --
     _append_report_section(report, "OVERLAY HISTOGRAM")
-    report.append(overlay_histogram(
+    report.append(_overlay_histogram(
         data_base, data_exp, label_base, label_exp, edges))
 
     # -- Distribution Shape --

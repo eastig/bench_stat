@@ -182,7 +182,7 @@ class BenchStatRegressionTests(unittest.TestCase):
     def test_constant_data_normality_histogram_does_not_crash(self):
         same = [5.0] * 20
         edges = mod._compute_bins([same])
-        out = mod.normality_histogram(same, "same", edges)
+        out = mod._normality_histogram(same, "same", edges)
         self.assertIn("Actual vs. Normal Expected", out)
 
     def test_small_sample_raises_value_error(self):
@@ -1109,11 +1109,11 @@ class BenchStatRegressionTests(unittest.TestCase):
         self.assertEqual(hist_without_stats, hist_with_stats,
                         "_single_histogram output must be identical with/without stats")
 
-        # Test normality_histogram with and without stats
-        norm_without_stats = mod.normality_histogram(data, "test", edges)
-        norm_with_stats = mod.normality_histogram(data, "test", edges, stats=stats)
+        # Test _normality_histogram with and without stats
+        norm_without_stats = mod._normality_histogram(data, "test", edges)
+        norm_with_stats = mod._normality_histogram(data, "test", edges, stats=stats)
         self.assertEqual(norm_without_stats, norm_with_stats,
-                        "normality_histogram output must be identical with/without stats")
+                        "_normality_histogram output must be identical with/without stats")
 
         # Test _stability_chart with and without stats
         stab_without_stats = mod._stability_chart(data, "test")
@@ -2679,11 +2679,11 @@ class BenchStatRegressionTests(unittest.TestCase):
         self.assertEqual(mod.interpret_cohens_d(-0.6), "Medium")
 
     def test_interpret_cv_all_branches(self):
-        """Correctness: interpret_cv returns correct interpretation for each range."""
-        self.assertIn("Very low", mod.interpret_cv(0.5))
-        self.assertIn("Low", mod.interpret_cv(2.0))
-        self.assertIn("Moderate", mod.interpret_cv(4.0))
-        self.assertIn("High", mod.interpret_cv(6.0))
+        """Correctness: _interpret_cv returns correct interpretation for each range."""
+        self.assertIn("Very low", mod._interpret_cv(0.5))
+        self.assertIn("Low", mod._interpret_cv(2.0))
+        self.assertIn("Moderate", mod._interpret_cv(4.0))
+        self.assertIn("High", mod._interpret_cv(6.0))
 
     def test_interpret_skewness_all_branches(self):
         """Correctness: _interpret_skewness returns correct interpretation."""
@@ -2786,20 +2786,20 @@ class BenchStatRegressionTests(unittest.TestCase):
             self.assertLessEqual(p, 1.0)
 
     def test_format_outlier_report_with_and_without_outliers(self):
-        """Correctness: format_outlier_report formats both cases correctly."""
+        """Correctness: _format_outlier_report formats both cases correctly."""
         stats = mod.compute_descriptive_stats([1, 2, 3, 4, 5, 6, 7, 8, 9, 100])
 
         # With outliers
         outliers_iqr = [100]
         outliers_zscore = [(100.0, 3.5)]
-        lines = mod.format_outlier_report(stats, outliers_iqr, outliers_zscore)
+        lines = mod._format_outlier_report(stats, outliers_iqr, outliers_zscore)
         text = "\n".join(lines)
         self.assertIn("100", text)
         self.assertIn("IQR Method", text)
         self.assertIn("Z-score Method", text)
 
         # Without outliers
-        lines_clean = mod.format_outlier_report(stats, [], [])
+        lines_clean = mod._format_outlier_report(stats, [], [])
         text_clean = "\n".join(lines_clean)
         self.assertIn("No outliers detected", text_clean)
 
