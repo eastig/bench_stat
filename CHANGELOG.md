@@ -24,12 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 - `_ci_index_bounds` helper (no longer needed with scipy.stats.bootstrap).
+- `run_tests.sh` (redundant with `python -m unittest`).
+- n=1 and n=2 edge case handling (minimum 3 samples now required).
 
 ### Testing
 
-- 139 regression tests (up from 101).
+- 137 regression tests (up from 101).
+- Minimum 3 samples required (n=1 and n=2 edge cases removed).
 - Added reference data tests against `test_data/` CSV inputs.
 - Added correctness tests for all statistical functions against scipy reference.
+- Unexpected warnings treated as test failures; only scipy precision-loss
+  warnings allowed in specific constant-data tests.
 
 ## [1.0.0] - 2026-03-05
 
