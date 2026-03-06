@@ -70,7 +70,9 @@ def load_csv(filename):
     nan_count = int(np.sum(np.isnan(raw)))
     data = raw[~np.isnan(raw)]
     if nan_count > 0:
-        warnings.warn("{}: {} non-numeric value(s) skipped".format(filename, nan_count))
+        warnings.warn(
+            "{}: {} non-numeric value(s) skipped".format(filename, nan_count),
+            stacklevel=2)
     return data.tolist()
 
 
@@ -760,53 +762,35 @@ def _t_critical(alpha, df):
 # =============================================================================
 
 def welch_t_test(data1, data2):
-    """Welch's two-sample t-test computed from single variance values.
+    """Welch's two-sample t-test using scipy.stats.ttest_ind.
 
     Returns (t_stat, df, p_two_tailed).
     Tests whether data2 is significantly different from data1.
     t_stat > 0 means data2 > data1 on average.
-
-    Computes everything from a single set of variance values to ensure
-    the reported df is consistent with the reported p-value.
     """
     n1, n2 = len(data1), len(data2)
     if n1 < 2 or n2 < 2:
         return 0, n1 + n2 - 2, 1.0
 
-    # Convert once to avoid repeated list-to-array conversions
     arr1 = np.asarray(data1)
     arr2 = np.asarray(data2)
 
-    mean1 = float(arr1.mean())
-    mean2 = float(arr2.mean())
-    v1 = float(arr1.var(ddof=1))
-    v2 = float(arr2.var(ddof=1))
-    se = math.sqrt(v1 / n1 + v2 / n2)
+    # scipy computes data1 - data2; we want data2 - data1, so negate t_stat
+    result = sp_stats.ttest_ind(arr1, arr2, equal_var=False)
+    t_stat = -float(result.statistic)
+    df = float(result.df)
+    p_two = float(result.pvalue)
 
-    if se > 0:
-        t_stat = (mean2 - mean1) / se
-    else:
-        # When se == 0, t_stat is inf if means differ, else 0
-        mean_diff = mean2 - mean1
+    # Handle NaN from zero-variance edge cases (both groups constant)
+    if math.isnan(t_stat) or math.isnan(df):
+        mean_diff = float(arr2.mean()) - float(arr1.mean())
+        df = float(n1 + n2 - 2)
         if mean_diff != 0:
             t_stat = float('inf') if mean_diff > 0 else float('-inf')
+            p_two = 0.0
         else:
             t_stat = 0.0
-
-    # Compute Welch-Satterthwaite degrees of freedom
-    num = (v1 / n1 + v2 / n2) ** 2
-    den = (v1 / n1) ** 2 / (n1 - 1) + (v2 / n2) ** 2 / (n2 - 1)
-    df = num / den if den > 0 else float(n1 + n2 - 2)
-
-    # Compute two-tailed p-value from t-stat and df
-    if se > 0:
-        p_two = float(2 * sp_stats.t.sf(abs(t_stat), df))
-    elif mean1 != mean2:
-        # When se == 0 but means differ, p-value is 0 (highly significant)
-        p_two = 0.0
-    else:
-        # When se == 0 and means are equal, no test possible
-        p_two = 1.0
+            p_two = 1.0
 
     return t_stat, df, p_two
 
@@ -855,41 +839,26 @@ def mann_whitney_u(data1, data2):
 
 
 def permutation_test(data1, data2, n_perms=10000, seed=42):
-    """Permutation test for difference in means.
+    """Permutation test for difference in means using scipy.stats.permutation_test.
 
     Returns (observed_diff, p_two_tailed).
 
-    Uses a vectorized batched approach to compute permutations efficiently.
-    Memory usage is controlled via batching: ~10MB per batch for typical benchmarks.
+    Uses scipy's native implementation which supports exact permutations for
+    small samples and optimized randomized permutations for large samples.
     """
-    rng = np.random.RandomState(seed)
-    combined = np.concatenate([np.asarray(data1), np.asarray(data2)])
-    n1 = len(data1)
-    n_total = len(combined)
-    n2 = n_total - n1
-    observed_diff = float(np.mean(combined[n1:])) - float(np.mean(combined[:n1]))
+    arr1 = np.asarray(data1)
+    arr2 = np.asarray(data2)
+    observed_diff = float(arr2.mean() - arr1.mean())
 
-    total_sum = combined.sum()
-    count = 0
-    # Calculate batch size to limit memory usage (~10MB per batch)
-    # Each batch stores: batch_size × n_total elements for indices
-    batch_size = min(n_perms, max(1, 10_000_000 // n_total))
+    def statistic(x, y, axis):
+        return np.mean(y, axis=axis) - np.mean(x, axis=axis)
 
-    remaining = n_perms
-    while remaining > 0:
-        batch = min(batch_size, remaining)
-        # Generate random indices for permutations
-        # argsort of random values gives us random permutations
-        indices = np.argsort(rng.rand(batch, n_total), axis=1)
-        # Calculate group1 sums for each permutation
-        group1_sums = combined[indices[:, :n1]].sum(axis=1)
-        # Compute mean differences: mean(group2) - mean(group1)
-        perm_diffs = (total_sum - group1_sums) / n2 - group1_sums / n1
-        count += int(np.sum(np.abs(perm_diffs) > abs(observed_diff)))
-        remaining -= batch
+    result = sp_stats.permutation_test(
+        (arr1, arr2), statistic, n_resamples=n_perms,
+        alternative='two-sided', vectorized=True,
+        rng=np.random.default_rng(seed))
 
-    p_two = (float(count) + 1) / (n_perms + 1)
-    return float(observed_diff), float(p_two)
+    return observed_diff, float(result.pvalue)
 
 
 def bootstrap_ci(data1, data2, n_boot=10000, ci=95, seed=42):
@@ -897,43 +866,40 @@ def bootstrap_ci(data1, data2, n_boot=10000, ci=95, seed=42):
 
     Returns (ci_lower, ci_upper, p_two_tailed).
 
-    Uses vectorized bootstrap sampling with batching for memory efficiency.
-    Memory usage is controlled via batching: ~10MB per batch for typical benchmarks.
+    Uses scipy.stats.bootstrap with BCa (bias-corrected and accelerated) method
+    for better coverage on skewed distributions. The p-value is computed from
+    the bootstrap distribution of mean differences.
+    Falls back to simple computation for constant data where BCa is undefined.
     """
-    rng = np.random.RandomState(seed)
     data1_arr = np.asarray(data1)
     data2_arr = np.asarray(data2)
-    n1 = len(data1_arr)
-    n2 = len(data2_arr)
 
-    # Generate bootstrap indices in batches to control memory usage
-    batch_size = min(n_boot, max(1, 10_000_000 // max(n1, n2)))
-    all_diffs = []
-    remaining = n_boot
-    while remaining > 0:
-        batch = min(batch_size, remaining)
-        idx1 = rng.randint(0, n1, size=(batch, n1))
-        idx2 = rng.randint(0, n2, size=(batch, n2))
-        means1 = data1_arr[idx1].sum(axis=1) / n1
-        means2 = data2_arr[idx2].sum(axis=1) / n2
-        all_diffs.append(means2 - means1)
-        remaining -= batch
-    diffs = np.concatenate(all_diffs)
+    # BCa requires non-constant data in at least one group
+    if np.ptp(data1_arr) == 0 and np.ptp(data2_arr) == 0:
+        diff = float(data2_arr.mean() - data1_arr.mean())
+        if diff == 0:
+            return 0.0, 0.0, 1.0
+        return diff, diff, 0.0
 
-    diffs_sorted = np.sort(diffs)
+    confidence_level = ci / 100.0
 
-    lower_idx, upper_idx = _ci_index_bounds(n_boot, ci)
-    ci_lower = float(diffs_sorted[lower_idx])
-    ci_upper = float(diffs_sorted[upper_idx])
+    def mean_diff(x, y, axis):
+        return np.mean(y, axis=axis) - np.mean(x, axis=axis)
 
-    # Compute p-value: proportion of bootstrap samples on each side of zero
-    # Use strict inequalities to avoid double-counting diffs == 0
-    p_left = np.sum(diffs < 0) / n_boot
-    p_right = np.sum(diffs > 0) / n_boot
+    result = sp_stats.bootstrap(
+        (data1_arr, data2_arr), mean_diff, n_resamples=n_boot,
+        confidence_level=confidence_level, method='BCa', paired=False,
+        vectorized=True, rng=np.random.default_rng(seed))
+
+    ci_lower = float(result.confidence_interval.low)
+    ci_upper = float(result.confidence_interval.high)
+
+    # Compute p-value from bootstrap distribution
+    diffs = result.bootstrap_distribution.ravel()
+    n = len(diffs)
+    p_left = np.sum(diffs < 0) / n
+    p_right = np.sum(diffs > 0) / n
     p_equal = 1.0 - p_left - p_right
-
-    # For two-tailed test: take the rarer side, add half of ties, and double
-    # When all diffs are 0 (p_equal=1), this correctly yields p_two=1.0
     p_two = float(min(1.0, 2.0 * (min(p_left, p_right) + p_equal / 2)))
 
     return ci_lower, ci_upper, p_two
@@ -942,36 +908,27 @@ def bootstrap_ci(data1, data2, n_boot=10000, ci=95, seed=42):
 def bootstrap_single_ci(data, n_boot=10000, ci=95, seed=42):
     """Bootstrap confidence interval for the mean of a single sample.
 
-    Uses manual vectorized resampling with batching for memory efficiency.
-    Memory usage is controlled via batching: ~10MB per batch for typical benchmarks.
+    Uses scipy.stats.bootstrap with BCa (bias-corrected and accelerated) method
+    for better coverage on skewed distributions.
+    Falls back to percentile method for constant data where BCa is undefined.
     """
-    rng = np.random.RandomState(seed)
     data_arr = np.asarray(data)
     n = len(data_arr)
+    m = float(data_arr.mean())
 
-    # Generate bootstrap indices in batches to control memory usage
-    batch_size = min(n_boot, max(1, 10_000_000 // n))
-    all_means = []
-    remaining = n_boot
-    while remaining > 0:
-        batch = min(batch_size, remaining)
-        idx = rng.randint(0, n, size=(batch, n))
-        all_means.append(data_arr[idx].sum(axis=1) / n)
-        remaining -= batch
-    means = np.concatenate(all_means)
+    # BCa requires n >= 2 and non-constant data
+    if n < 2 or np.ptp(data_arr) == 0:
+        return m, m
 
-    means = np.sort(means)
+    confidence_level = ci / 100.0
+    result = sp_stats.bootstrap(
+        (data_arr,), np.mean, n_resamples=n_boot,
+        confidence_level=confidence_level, method='BCa',
+        rng=np.random.default_rng(seed))
 
-    lower_idx, upper_idx = _ci_index_bounds(n_boot, ci)
-    return float(means[lower_idx]), float(means[upper_idx])
+    return float(result.confidence_interval.low), float(result.confidence_interval.high)
 
 
-def _ci_index_bounds(sample_count, ci):
-    """Return lower/upper index bounds for a central CI from sorted bootstrap samples."""
-    alpha = (100 - ci) / 2 / 100
-    lower_idx = int(alpha * sample_count)
-    upper_idx = min(int(math.ceil((1 - alpha) * sample_count)) - 1, sample_count - 1)
-    return lower_idx, upper_idx
 
 
 def dagostino_pearson_test(data):

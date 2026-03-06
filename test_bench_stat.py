@@ -195,14 +195,13 @@ class BenchStatRegressionTests(unittest.TestCase):
     def test_welch_t_test_with_zero_variance_samples(self):
         """Regression test for welch_t_test 0/0 df computation.
 
-        Both groups are constant, so v1 == v2 == 0 and Welch-Satterthwaite
-        denominator becomes 0. Function should not raise ZeroDivisionError.
+        Both groups are constant, so v1 == v2 == 0. scipy returns t=-inf, df=1.0.
+        Our function negates t to +inf (data2 > data1 direction).
         """
         t_stat, df, p_two = mod.welch_t_test([5.0, 5.0, 5.0], [7.0, 7.0, 7.0])
-        self.assertGreater(t_stat, 0.0)
-        self.assertEqual(df, 4.0)
-        self.assertGreaterEqual(p_two, 0.0)
-        self.assertLessEqual(p_two, 1.0)
+        self.assertTrue(math.isinf(t_stat) and t_stat > 0)
+        self.assertGreater(df, 0)
+        self.assertEqual(p_two, 0.0)
 
     def test_welch_t_test_df_p_value_consistency(self):
         """Regression test: welch_t_test t_stat, df, and p_value consistency.
@@ -557,62 +556,6 @@ class BenchStatRegressionTests(unittest.TestCase):
         stats2 = mod.compute_descriptive_stats([102.0, 105.0])
         result = mod._pooled_stdev_from_params(1, 0.0, stats2['n'], stats2['var'])
         self.assertGreater(result, 0.0)
-
-    def test_ci_index_bounds_with_ci_100(self):
-        """Regression test for _ci_index_bounds IndexError when ci=100.
-
-        When ci=100 (alpha=0.0), upper_idx = int(1.0 * n) = n, which is out of bounds.
-        The fix caps upper_idx to sample_count - 1.
-        """
-        # When ci=100, upper_idx should be capped at sample_count - 1
-        lower, upper = mod._ci_index_bounds(100, ci=100)
-        self.assertEqual(lower, 0)
-        self.assertEqual(upper, 99)  # capped to last valid index
-
-        # When ci=100 and sample_count is small
-        lower, upper = mod._ci_index_bounds(10, ci=100)
-        self.assertEqual(lower, 0)
-        self.assertEqual(upper, 9)  # capped to last valid index
-
-        # Normal case with ci < 100 should still work
-        lower, upper = mod._ci_index_bounds(100, ci=95)
-        self.assertEqual(lower, 2)
-        self.assertEqual(upper, 97)
-
-    def test_ci_index_bounds_with_odd_sample_counts(self):
-        """Regression test for _ci_index_bounds ceil rounding fix.
-
-        When sample_count is not evenly divisible by 1/(1-alpha), truncating
-        with int() causes systematic underestimation of the upper bound.
-
-        The fix uses math.ceil((1 - alpha) * sample_count) - 1 to properly
-        round up before subtracting, ensuring correct percentile indices.
-
-        Test cases verify: upper_idx == min(ceil(0.975 * n) - 1, n - 1)
-        """
-        # Test case: _ci_index_bounds(9999, 95) should return upper_idx == 9749
-        # alpha = 0.025, (1-alpha)*9999 = 0.975*9999 = 9749.025
-        # ceil(9749.025) - 1 = 9750 - 1 = 9749
-        lower, upper = mod._ci_index_bounds(9999, ci=95)
-        self.assertEqual(upper, 9749, msg="9999 samples at 95% CI should have upper_idx=9749")
-
-        # Test with sample_count = 10001 (odd)
-        # (1-alpha)*10001 = 0.975*10001 = 9750.975
-        # ceil(9750.975) - 1 = 9751 - 1 = 9750
-        lower, upper = mod._ci_index_bounds(10001, ci=95)
-        self.assertEqual(upper, 9750)
-
-        # Test with sample_count = 401 (odd)
-        # (1-alpha)*401 = 0.975*401 = 390.975
-        # ceil(390.975) - 1 = 391 - 1 = 390
-        lower, upper = mod._ci_index_bounds(401, ci=95)
-        self.assertEqual(upper, 390)
-
-        # Test with sample_count = 99 (odd)
-        # (1-alpha)*99 = 0.975*99 = 96.525
-        # ceil(96.525) - 1 = 97 - 1 = 96
-        lower, upper = mod._ci_index_bounds(99, ci=95)
-        self.assertEqual(upper, 96)
 
     def test_dagostino_pearson_test_with_constant_data(self):
         """Regression test for dagostino_pearson_test crash on constant data.
@@ -2182,43 +2125,17 @@ class BenchStatRegressionTests(unittest.TestCase):
     def test_permutation_test_identical_data(self):
         """Regression test: permutation_test with identical datasets.
 
-        Bug: Uses >= instead of > when counting extreme permutations, inflating p-value.
-        When two identical datasets are compared (observed_diff == 0), every permutation
-        diff is also 0. With the buggy >= operator, all permutations count, giving p=1.0.
-
-        Fix: Use strict > operator and apply the standard correction (count+1)/(n_perms+1).
-        With this fix, when observed_diff == 0:
-        - No permutation diff is > 0 (strict inequality)
-        - count = 0
-        - p = (0 + 1) / (n_perms + 1) ≈ 1/(n_perms+1)
-
-        This test verifies the corrected behavior.
+        When two identical datasets are compared, observed_diff == 0 and all
+        permutation diffs are also 0. scipy.stats.permutation_test correctly
+        returns p=1.0 (no evidence of difference).
         """
-        # Identical datasets
         data1 = [5.0] * 20
         data2 = [5.0] * 20
-        n_perms = 10000
 
-        observed_diff, p_two = mod.permutation_test(
-            data1, data2, n_perms=n_perms, seed=42
-        )
+        observed_diff, p_two = mod.permutation_test(data1, data2, n_perms=10000, seed=42)
 
-        # observed_diff should be exactly 0
-        self.assertEqual(observed_diff, 0.0, "Identical data should have zero observed diff")
-
-        # p_two should be approximately 1/(n_perms+1) = 1/10001 ≈ 0.0001
-        expected_p = 1.0 / (n_perms + 1)
-        self.assertAlmostEqual(
-            p_two, expected_p, places=5,
-            msg=f"With identical data, p should be ~{expected_p:.6f}, got {p_two:.6f}"
-        )
-
-        # p_two should NOT be 1.0 (the buggy >= result)
-        self.assertNotEqual(p_two, 1.0, "Buggy >= operator would give p=1.0")
-
-        # p_two should be bounded in (0, 1]
-        self.assertGreater(p_two, 0.0)
-        self.assertLessEqual(p_two, 1.0)
+        self.assertEqual(observed_diff, 0.0)
+        self.assertEqual(p_two, 1.0)
 
     def test_permutation_test_clearly_different_groups(self):
         """Regression test: permutation_test with clearly different groups.
@@ -3055,6 +2972,159 @@ class BenchStatRegressionTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             mod.generate_report([1.0, 2.0], [], "A", "B")
+
+
+# =============================================================================
+# Reference data regression tests (test_data/ directory)
+# =============================================================================
+
+class ReferenceDataRegressionTests(unittest.TestCase):
+    """Validate reports against reference outputs generated from test_data/ CSVs.
+
+    These tests ensure that key numeric values (descriptive stats, test statistics,
+    p-values, effect sizes) and verdicts remain correct across code changes.
+    Values that depend on bootstrap/permutation seeds are checked with tolerance.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.base = np.genfromtxt("test_data/crypto.aes.base.csv").tolist()
+        cls.fix = np.genfromtxt("test_data/crypto.aes.fix.csv").tolist()
+        cls.op1 = np.genfromtxt("test_data/crypto.aes.fix.op1.csv").tolist()
+        cls.op2 = np.genfromtxt("test_data/crypto.aes.fix.op2.csv").tolist()
+
+    def _check_descriptive_stats(self, data, ref):
+        """Verify descriptive stats match reference values."""
+        stats = mod.compute_descriptive_stats(data)
+        for key, expected in ref.items():
+            self.assertAlmostEqual(stats[key], expected, places=2,
+                                   msg=f"Mismatch in {key}")
+
+    def _check_comparison_report(self, report, ref):
+        """Verify comparison report contains expected values."""
+        self.assertIn(ref['diff'], report)
+        self.assertIn(ref['diff_pct'], report)
+        self.assertIn(f"Cohen's d: {ref['cohens_d']}", report)
+        self.assertIn(f"({ref['cohens_d_interp']})", report)
+        self.assertIn(ref['verdict_text'], report)
+
+    # --- Single report tests ---
+
+    def test_base_descriptive_stats(self):
+        """Reference: crypto.aes.base descriptive stats match base_stats.txt."""
+        self._check_descriptive_stats(self.base, {
+            'n': 58, 'mean': 1054.53, 'stdev': 12.24, 'median': 1054.37,
+            'min': 1030.72, 'max': 1089.65, 'skewness': 0.633, 'ex_kurtosis': 0.712,
+        })
+
+    def test_fix_descriptive_stats(self):
+        """Reference: crypto.aes.fix descriptive stats match fix_stats.txt."""
+        self._check_descriptive_stats(self.fix, {
+            'n': 58, 'mean': 1059.45, 'stdev': 11.96, 'median': 1059.66,
+            'min': 1028.77, 'max': 1090.31, 'skewness': 0.047, 'ex_kurtosis': 0.094,
+        })
+
+    def test_op1_descriptive_stats(self):
+        """Reference: crypto.aes.fix.op1 descriptive stats match fix_stats.op1.txt."""
+        self._check_descriptive_stats(self.op1, {
+            'n': 58, 'mean': 1060.26, 'stdev': 12.88, 'median': 1062.53,
+            'min': 1034.21, 'max': 1084.64, 'skewness': -0.265, 'ex_kurtosis': -0.772,
+        })
+
+    def test_op2_descriptive_stats(self):
+        """Reference: crypto.aes.fix.op2 descriptive stats match fix_stats.op2.txt."""
+        self._check_descriptive_stats(self.op2, {
+            'n': 58, 'mean': 1062.12, 'stdev': 12.37, 'median': 1062.76,
+            'min': 1038.03, 'max': 1101.81, 'skewness': 0.419, 'ex_kurtosis': 1.030,
+        })
+
+    def test_base_single_report_ci(self):
+        """Reference: base parametric CI matches base_stats.txt."""
+        stats = mod.compute_descriptive_stats(self.base)
+        lines, ci_lo, ci_hi, _ = mod._format_stats_single(stats, 0.05)
+        self.assertAlmostEqual(ci_lo, 1051.31, places=2)
+        self.assertAlmostEqual(ci_hi, 1057.75, places=2)
+
+    # --- Comparison statistical tests ---
+
+    def test_base_vs_fix_welch(self):
+        """Reference: base vs fix Welch's t-test matches base_vs_fix.txt."""
+        t, df, p2 = mod.welch_t_test(self.base, self.fix)
+        self.assertAlmostEqual(t, 2.191, places=3)
+        self.assertAlmostEqual(df, 113.9, places=1)
+        self.assertAlmostEqual(p2, 0.0305, places=4)
+
+    def test_base_vs_fix_mann_whitney(self):
+        """Reference: base vs fix Mann-Whitney U matches base_vs_fix.txt."""
+        u, z, p2 = mod.mann_whitney_u(self.base, self.fix)
+        self.assertAlmostEqual(u, 1254, places=0)
+        self.assertAlmostEqual(z, 2.363, places=3)
+        self.assertAlmostEqual(p2, 0.0181, places=4)
+
+    def test_base_vs_fix_effect_size(self):
+        """Reference: base vs fix Cohen's d matches base_vs_fix.txt."""
+        stats_b = mod.compute_descriptive_stats(self.base)
+        stats_f = mod.compute_descriptive_stats(self.fix)
+        s_pool = mod._pooled_stdev_from_params(
+            stats_b['n'], stats_b['var'], stats_f['n'], stats_f['var'])
+        d = (stats_f['mean'] - stats_b['mean']) / s_pool
+        self.assertAlmostEqual(d, 0.407, places=3)
+        self.assertEqual(mod.interpret_cohens_d(d), "Small")
+
+    def test_base_vs_fix_verdict(self):
+        """Reference: base vs fix verdict is significant improvement."""
+        report = mod.generate_report(self.base, self.fix, "Base", "Fix")
+        self.assertIn("SIGNIFICANT IMPROVEMENT", report)
+        self.assertIn("+4.92", report)
+        self.assertIn("+0.47%", report)
+
+    def test_base_vs_op2_welch(self):
+        """Reference: base vs op2 Welch's t-test matches base_vs_fix_op2.txt."""
+        t, df, p2 = mod.welch_t_test(self.base, self.op2)
+        self.assertAlmostEqual(t, 3.324, places=3)
+        self.assertAlmostEqual(df, 114.0, places=1)
+        self.assertAlmostEqual(p2, 0.0012, places=4)
+
+    def test_base_vs_op2_verdict(self):
+        """Reference: base vs op2 verdict is significant improvement."""
+        report = mod.generate_report(self.base, self.op2, "Base", "Op2")
+        self.assertIn("SIGNIFICANT IMPROVEMENT", report)
+        self.assertIn("+7.60", report)
+
+    def test_fix_vs_op1_no_difference(self):
+        """Reference: fix vs op1 verdict is no significant difference."""
+        report = mod.generate_report(self.fix, self.op1, "Fix", "Op1")
+        self.assertIn("NO SIGNIFICANT DIFFERENCE", report)
+
+    def test_fix_vs_op2_no_difference(self):
+        """Reference: fix vs op2 verdict is no significant difference."""
+        report = mod.generate_report(self.fix, self.op2, "Fix", "Op2")
+        self.assertIn("NO SIGNIFICANT DIFFERENCE", report)
+
+    # --- Formatting checks ---
+
+    def test_single_report_formatting(self):
+        """Reference: single report has all expected sections."""
+        report = mod.generate_single_report(self.base, "crypto.aes.base")
+        for section in [
+            "DESCRIPTIVE STATISTICS", "FREQUENCY HISTOGRAM",
+            "DISTRIBUTION SHAPE", "NORMALITY ASSESSMENT",
+            "OUTLIER DETECTION", "STABILITY ANALYSIS",
+            "BOOTSTRAP CONFIDENCE INTERVAL", "SAMPLE SIZE ADEQUACY",
+            "SUMMARY",
+        ]:
+            self.assertIn(section, report)
+
+    def test_comparison_report_formatting(self):
+        """Reference: comparison report has all expected sections."""
+        report = mod.generate_report(self.base, self.fix, "Base", "Fix")
+        for section in [
+            "DESCRIPTIVE STATISTICS", "FREQUENCY HISTOGRAMS",
+            "OVERLAY HISTOGRAM", "DISTRIBUTION SHAPE",
+            "NORMALITY ASSESSMENT", "STATISTICAL TESTS",
+            "SAMPLE SIZE & POWER", "CUMULATIVE COMPARISON", "VERDICT",
+        ]:
+            self.assertIn(section, report)
 
 
 if __name__ == "__main__":

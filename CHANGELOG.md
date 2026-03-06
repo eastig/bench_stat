@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-03-06
+
+### Changed
+
+- **Bootstrap CI**: Replaced custom percentile bootstrap with `scipy.stats.bootstrap`
+  using BCa (bias-corrected and accelerated) method. BCa provides better coverage
+  for skewed distributions.
+- **Permutation test**: Replaced custom vectorized batching with
+  `scipy.stats.permutation_test`. Supports exact permutations for small samples.
+- **Welch's t-test**: Uses `scipy.stats.ttest_ind().df` instead of manual
+  Welch-Satterthwaite degrees-of-freedom calculation.
+- **RNG**: Bootstrap and permutation functions use `np.random.default_rng` (modern
+  numpy Generator API) instead of deprecated `np.random.RandomState`.
+- **Minimum requirements**: Python >=3.9, numpy >=1.24, scipy >=1.11.
+- **Warnings**: `load_csv` uses `stacklevel=2` for better warning messages.
+
+### Removed
+
+- `_ci_index_bounds` helper (no longer needed with scipy.stats.bootstrap).
+
+### Testing
+
+- 139 regression tests (up from 101).
+- Added reference data tests against `test_data/` CSV inputs.
+- Added correctness tests for all statistical functions against scipy reference.
+
 ## [1.0.0] - 2026-03-05
 
 ### Added

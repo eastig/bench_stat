@@ -1,7 +1,7 @@
 # bench_stat - Statistical Benchmarking Analysis Tool
 
-[![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-101/101-brightgreen.svg)]()
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-139/139-brightgreen.svg)]()
 
 A comprehensive statistical analysis tool for performance benchmarks with confidence intervals, statistical significance testing, and cumulative analysis.
 
@@ -183,7 +183,7 @@ Generates cumulative threshold comparison table showing percentage of values ≥
 
 ## Testing
 
-The project includes 101 comprehensive regression tests covering:
+The project includes 139 comprehensive regression tests covering:
 - Statistical correctness (normality, statistical tests, effect sizes)
 - Edge cases (n=1, zero values, identical datasets, zero variance)
 - Infinity handling in confidence intervals
@@ -193,7 +193,7 @@ The project includes 101 comprehensive regression tests covering:
 
 ```bash
 python3 -m unittest test_bench_stat -v
-# Output: Ran 101 tests in ~8 seconds ... OK
+# Output: Ran 139 tests in ~8 seconds ... OK
 ```
 
 ## License

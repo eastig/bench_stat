@@ -1,0 +1,214 @@
+========================================================================
+  BENCHMARK COMPARISON REPORT
+  crypto.aes.base (baseline) vs. crypto.aes.fix (experiment)
+  Higher is better
+========================================================================
+
+────────────────────────────────────────────────────────────────────────
+  DESCRIPTIVE STATISTICS
+────────────────────────────────────────────────────────────────────────
+  Metric           crypto.aes.base   crypto.aes.fix
+  ───────────────  ───────────────  ───────────────
+  n                             58               58
+  Mean                     1054.53          1059.45
+  Median                   1054.37          1059.66
+  Std Dev                    12.24            11.96
+  Min                      1030.72          1028.77
+  Max                      1089.65          1090.31
+  25th pct                 1045.79          1051.51
+  75th pct                 1059.70          1068.27
+  Skewness                   0.633            0.047
+  Ex. Kurtosis               0.712            0.094
+
+  Observed difference: +4.92 (+0.47%)
+  Direction: ✅ Improvement
+
+────────────────────────────────────────────────────────────────────────
+  FREQUENCY HISTOGRAMS
+────────────────────────────────────────────────────────────────────────
+  crypto.aes.base
+  ops/min           Frequency
+  [1028.8,1035.6) │ █████                                      2
+  [1035.6,1042.4) │ █████████████████                          6
+  [1042.4,1049.3) │ ██████████████████████████████████        12
+  [1049.3,1056.1) │ ██████████████████████████████████        12  ← mean (1054.53)
+  [1056.1,1063.0) │ ████████████████████████████████████████  14  ← mode
+  [1063.0,1069.8) │ █████████████████                          6
+  [1069.8,1076.6) │ ████████                                   3
+  [1076.6,1083.5) │ ██                                         1
+  [1083.5,1090.3) │ █████                                      2
+                  └─────────────────────────────────────────────
+                    Mean = 1054.53  Std = 12.24  n = 58
+
+  crypto.aes.fix
+  ops/min           Frequency
+  [1028.8,1035.6) │ ██                                         1
+  [1035.6,1042.4) │ █████                                      2
+  [1042.4,1049.3) │ █████████████████████████                  9
+  [1049.3,1056.1) │ ██████████████████████████████████        12
+  [1056.1,1063.0) │ ████████████████████████████              10  ← mean (1059.45)
+  [1063.0,1069.8) │ ████████████████████████████████████████  14  ← mode
+  [1069.8,1076.6) │ ████████████████████                       7
+  [1076.6,1083.5) │ ██                                         1
+  [1083.5,1090.3) │ █████                                      2
+                  └─────────────────────────────────────────────
+                    Mean = 1059.45  Std = 11.96  n = 58
+
+────────────────────────────────────────────────────────────────────────
+  OVERLAY HISTOGRAM
+────────────────────────────────────────────────────────────────────────
+  Side-by-Side: crypto.aes.base vs crypto.aes.fix
+  C=crypto.aes.base  c=crypto.aes.fix  ▒=Overlap
+
+  [1028.8,1035.6) │ ▒C                                                 C: 2  c: 1
+  [1035.6,1042.4) │ ▒▒CCCC                                             C: 6  c: 2
+  [1042.4,1049.3) │ ▒▒▒▒▒▒▒▒▒CCC                                       C:12  c: 9
+  [1049.3,1056.1) │ ▒▒▒▒▒▒▒▒▒▒▒▒                                       C:12  c:12
+  [1056.1,1063.0) │ ▒▒▒▒▒▒▒▒▒▒CCCC                                     C:14  c:10
+  [1063.0,1069.8) │ ▒▒▒▒▒▒cccccccc                                     C: 6  c:14
+  [1069.8,1076.6) │ ▒▒▒cccc                                            C: 3  c: 7
+  [1076.6,1083.5) │ ▒                                                  C: 1  c: 1
+  [1083.5,1090.3) │ ▒▒                                                 C: 2  c: 2
+                  └──────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────────────────
+  DISTRIBUTION SHAPE COMPARISON
+────────────────────────────────────────────────────────────────────────
+  crypto.aes.base         crypto.aes.fix        
+
+           ▄▄▄                        ▄▄        
+       ▄▄▄▄███                   ▄▄▄▄▄██        
+       ███████                 ▄▄███████▄▄      
+     ▄▄███████▄▄               ███████████      
+  ▄▄▄███████████▄▄  ▄▄       ▄▄███████████  ▄▄  
+
+────────────────────────────────────────────────────────────────────────
+  NORMALITY ASSESSMENT
+────────────────────────────────────────────────────────────────────────
+  crypto.aes.base — Actual vs. Normal Expected
+  ops/min          Actual  Expected  Shape comparison
+  [1028.8,1035.6) │ ██                       2  │ ░░░                    2.5   ≈ match
+  [1035.6,1042.4) │ ████████                 6  │ ░░░░░░░░               5.8   ≈ match
+  [1042.4,1049.3) │ █████████████████       12  │ ░░░░░░░░░░░░░░        10.0   ≈ match
+  [1049.3,1056.1) │ █████████████████       12  │ ░░░░░░░░░░░░░░░░░░    12.6   ≈ match
+  [1056.1,1063.0) │ ████████████████████    14  │ ░░░░░░░░░░░░░░░░      11.8   ≈ match
+  [1063.0,1069.8) │ ████████                 6  │ ░░░░░░░░░░░            8.1   ≈ match
+  [1069.8,1076.6) │ ████                     3  │ ░░░░░                  4.1   ≈ match
+  [1076.6,1083.5) │ █                        1  │ ░░                     1.5   ≈ match
+  [1083.5,1090.3) │ ██                       2  │                        0.4   ← EXCESS
+                  └───────────────────────────
+                    █ = Actual    ░ = Expected Normal
+
+  crypto.aes.fix — Actual vs. Normal Expected
+  ops/min          Actual  Expected  Shape comparison
+  [1028.8,1035.6) │ █                        1  │ ░                      1.0   ≈ match
+  [1035.6,1042.4) │ ██                       2  │ ░░░░                   3.2   ← DEFICIT
+  [1042.4,1049.3) │ ████████████             9  │ ░░░░░░░░░              7.0   ≈ match
+  [1049.3,1056.1) │ █████████████████       12  │ ░░░░░░░░░░░░░░░       11.2   ≈ match
+  [1056.1,1063.0) │ ██████████████          10  │ ░░░░░░░░░░░░░░░░░░    13.0   ≈ match
+  [1063.0,1069.8) │ ████████████████████    14  │ ░░░░░░░░░░░░░░░       11.1   ≈ match
+  [1069.8,1076.6) │ ██████████               7  │ ░░░░░░░░░              6.9   ≈ match
+  [1076.6,1083.5) │ █                        1  │ ░░░░                   3.1   ← DEFICIT
+  [1083.5,1090.3) │ ██                       2  │ ░                      1.0   ≈ match
+                  └───────────────────────────
+                    █ = Actual    ░ = Expected Normal
+
+  D'Agostino-Pearson Omnibus Test:
+  Dataset                Statistic     p-value          Normal?
+  ────────────────────  ──────────  ──────────  ───────────────
+  crypto.aes.base            5.414      0.0667            ✅ Yes
+  crypto.aes.fix             0.161      0.9225            ✅ Yes
+
+────────────────────────────────────────────────────────────────────────
+  STATISTICAL TESTS
+────────────────────────────────────────────────────────────────────────
+  Hypothesis: crypto.aes.fix > crypto.aes.base
+  Significance level: α = 0.05
+
+  Test                  Statistic                  p (1-tail)  p (2-tail)        Significant?
+  ────────────────────  ─────────────────────────  ──────────  ──────────  ──────────────────
+  Welch's t-test        t=2.191, df=113.9              0.0152      0.0305               ✅ Yes
+  Mann-Whitney U        U=1254, z=2.363                0.0091      0.0181               ✅ Yes
+  Permutation test      δ=4.92                         0.0156      0.0312               ✅ Yes
+  Bootstrap             CI=[0.47, 9.18]                0.0132      0.0264               ✅ Yes
+
+  Cohen's d: 0.407 (Small)
+    Interpretation: The means are 0.41 pooled standard deviations apart.
+    Win probability: A random crypto.aes.fix value beats a random crypto.aes.base value ~61% of the time.
+
+  p-value visual summary (one-tailed):
+
+  Test                  p-value  0.00  0.01  0.02  0.03  0.04  0.05
+                                 │     │     │     │     │     │
+  Welch's t-test         0.0152  │         ▓
+  Mann-Whitney U         0.0091  │     ▓
+  Permutation test       0.0156  │         ▓
+  Bootstrap              0.0132  │       ▓
+                                 │                              α=0.0500
+
+────────────────────────────────────────────────────────────────────────
+  SAMPLE SIZE & POWER ANALYSIS
+────────────────────────────────────────────────────────────────────────
+  Sample sizes:  crypto.aes.base: n=58,  crypto.aes.fix: n=58
+  Pooled Std Dev: 12.10
+
+  Minimum Detectable Effect (at 80% power):
+    Cohen's d:  0.525 (Medium)
+    Absolute:   ±6.35 ops/min
+    Relative:   ±0.60% of baseline mean
+
+  Power for observed effect (d=0.407):
+    Power: 58.4%
+    ⚠️  Moderate power — result is suggestive but could be missed
+
+  Power analysis for standard effect sizes:
+        Effect Size   Cohen's d      Absolute     Power     Adequate?
+    ───────────────  ──────────  ────────────  ────────  ────────────
+              Small       0.200         ±2.42    18.7%          ❌ No
+             Medium       0.500         ±6.05    76.1%  ⚠️  Marginal
+              Large       0.800         ±9.68    99.0%         ✅ Yes
+           Observed       0.407         ±4.92    58.4%  ⚠️  Marginal
+
+  Required n (per group) for 80% power:
+        Effect Size   Cohen's d      Absolute    Required n           Status
+    ───────────────  ──────────  ────────────  ────────────  ───────────────
+              Small       0.200         ±2.42           394  ❌ Need 336 more
+             Medium       0.500         ±6.05            64        ⚠️  Close
+              Large       0.800         ±9.68            26     ✅ Sufficient
+           Observed       0.407         ±4.92            96   ❌ Need 38 more
+
+  Assessment:
+  ⚠️  UNDERPOWERED for small effects.
+     Can reliably detect: d ≥ 0.53 (6.35 ops/min)
+     For small effects (d=0.2), need n=394 per group
+
+────────────────────────────────────────────────────────────────────────
+  CUMULATIVE COMPARISON
+────────────────────────────────────────────────────────────────────────
+  Percentage of values ≥ threshold:
+
+   Threshold  crypto.aes.base   crypto.aes.fix  Difference           Better
+  ──────────  ───────────────  ───────────────  ──────────  ───────────────
+      ≥ 1030             100%              98%         -2%           ≈ tie
+      ≥ 1036              95%              98%         +3%  crypto.aes.fix
+      ≥ 1042              86%              97%        +10%  crypto.aes.fix
+      ≥ 1048              69%              79%        +10%  crypto.aes.fix
+      ≥ 1055              47%              62%        +16%  crypto.aes.fix
+      ≥ 1061              22%              43%        +21%  crypto.aes.fix
+      ≥ 1067              14%              31%        +17%  crypto.aes.fix
+      ≥ 1073               9%              12%         +3%  crypto.aes.fix
+      ≥ 1079               3%               3%         +0%           ≈ tie
+
+────────────────────────────────────────────────────────────────────────
+  VERDICT
+────────────────────────────────────────────────────────────────────────
+  Tests significant at α=0.05: 4/4
+  Mean difference: +4.92 (+0.47%)
+  Cohen's d: 0.407 (Small)
+  Bootstrap 95% CI: [0.47, 9.18]
+
+  ✅ SIGNIFICANT IMPROVEMENT: crypto.aes.fix is significantly better than crypto.aes.base.
+
+  Practical significance: SMALL — real but modest improvement. Consider code quality and other factors.
+
+========================================================================

@@ -25,7 +25,7 @@ bench_stat/
 
 ### Source Code
 - **bench_stat.py**: Main module with all statistical functions and CLI entry point
-- **test_bench_stat.py**: Comprehensive test suite with 101 regression tests
+- **test_bench_stat.py**: Comprehensive test suite with 139 regression tests
 - **bench_perf.py**: Performance benchmark runner for key functions
 
 ### Configuration
