@@ -821,7 +821,7 @@ def permutation_test(data1, data2, n_perms=10000, seed=42):
     result = sp_stats.permutation_test(
         (arr1, arr2), statistic, n_resamples=n_perms,
         alternative='two-sided', vectorized=True,
-        rng=np.random.default_rng(seed))
+        random_state=np.random.default_rng(seed))
 
     return observed_diff, float(result.pvalue)
 
@@ -854,7 +854,7 @@ def bootstrap_ci(data1, data2, n_boot=10000, ci=95, seed=42):
     result = sp_stats.bootstrap(
         (data1_arr, data2_arr), mean_diff, n_resamples=n_boot,
         confidence_level=confidence_level, method='BCa', paired=False,
-        vectorized=True, rng=np.random.default_rng(seed))
+        vectorized=True, random_state=np.random.default_rng(seed))
 
     ci_lower = float(result.confidence_interval.low)
     ci_upper = float(result.confidence_interval.high)
@@ -888,7 +888,7 @@ def bootstrap_single_ci(data, n_boot=10000, ci=95, seed=42):
     result = sp_stats.bootstrap(
         (data_arr,), np.mean, n_resamples=n_boot,
         confidence_level=confidence_level, method='BCa',
-        rng=np.random.default_rng(seed))
+        random_state=np.random.default_rng(seed))
 
     return float(result.confidence_interval.low), float(result.confidence_interval.high)
 
