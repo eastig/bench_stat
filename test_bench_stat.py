@@ -185,12 +185,15 @@ class BenchStatRegressionTests(unittest.TestCase):
         out = mod.normality_histogram(same, "same", edges)
         self.assertIn("Actual vs. Normal Expected", out)
 
-    def test_small_sample_paths_do_not_crash(self):
-        self.assertEqual(_ref_stdev([1.0]), 0.0)
-        t_stat, df, p_two = mod.welch_t_test([1.0], [2.0])
-        self.assertEqual(t_stat, 0)
-        self.assertEqual(df, 0)
-        self.assertEqual(p_two, 1.0)
+    def test_small_sample_raises_value_error(self):
+        """Data with fewer than 3 samples must raise ValueError."""
+        with self.assertRaises(ValueError):
+            mod.compute_descriptive_stats([1.0])
+        with self.assertRaises(ValueError):
+            mod.compute_descriptive_stats([1.0, 2.0])
+        # 3 samples should work
+        stats = mod.compute_descriptive_stats([1.0, 2.0, 3.0])
+        self.assertEqual(stats['n'], 3)
 
     def test_welch_t_test_with_zero_variance_samples(self):
         """Regression test for welch_t_test 0/0 df computation.
@@ -525,8 +528,8 @@ class BenchStatRegressionTests(unittest.TestCase):
         self.assertEqual(d, 0.0)
 
         # One constant, one variable → d > 0
-        stats3 = mod.compute_descriptive_stats([100.0, 100.0])
-        stats4 = mod.compute_descriptive_stats([100.0, 110.0])
+        stats3 = mod.compute_descriptive_stats([100.0, 100.0, 100.0])
+        stats4 = mod.compute_descriptive_stats([100.0, 110.0, 105.0])
         s_pool = mod._pooled_stdev_from_params(
             stats3['n'], stats3['var'], stats4['n'], stats4['var'])
         self.assertGreater(s_pool, 0.0)
@@ -544,17 +547,14 @@ class BenchStatRegressionTests(unittest.TestCase):
 
         Should gracefully return 0 when n1 + n2 <= 2.
         """
-        # Single element in each group (n1=1, n2=1, total=2) → pooled stdev = 0
         result = mod._pooled_stdev_from_params(1, 0.0, 1, 0.0)
         self.assertEqual(result, 0.0)
 
-        # n1=1, n2=0 → pooled stdev = 0
         result = mod._pooled_stdev_from_params(1, 0.0, 0, 0.0)
         self.assertEqual(result, 0.0)
 
-        # Three elements combined (n1=1, n2=2, total=3): should compute normally
-        stats2 = mod.compute_descriptive_stats([102.0, 105.0])
-        result = mod._pooled_stdev_from_params(1, 0.0, stats2['n'], stats2['var'])
+        # n1=1, n2=2, total=3: should compute normally (uses raw params, not compute_descriptive_stats)
+        result = mod._pooled_stdev_from_params(1, 0.0, 2, 4.5)
         self.assertGreater(result, 0.0)
 
     def test_dagostino_pearson_test_with_constant_data(self):
@@ -721,70 +721,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         # Verify no false "distribution may be non-normal" warning
         self.assertNotIn("non-normal", report.lower())
 
-    def test_t_critical_with_df_zero(self):
-        """Regression test for _t_critical with df=0 (n=1 case).
 
-        When n=1, df=n-1=0, and sp_stats.t.ppf(alpha/2, 0) returns nan.
-        This nan propagates through CI and margin-of-error calculations.
-        The fix: _t_critical returns float('inf') for df < 1.
-        """
-        # _t_critical should return inf for df=0, not nan
-        t_crit = mod._t_critical(0.05, 0)
-        self.assertTrue(np.isinf(t_crit))
-        self.assertFalse(np.isnan(t_crit))
-
-        # _confidence_interval (test helper) should return (-inf, inf) for df=0
-        ci_lo, ci_hi = _ref_confidence_interval(5.0, 0.0, 0.05, 0)
-        self.assertTrue(np.isinf(ci_lo))
-        self.assertTrue(np.isinf(ci_hi))
-
-    def test_format_stats_single_with_n_equals_one(self):
-        """Regression test for _format_stats_single with n=1.
-
-        With n=1, df=0 and CI cannot be computed. The fix displays "N/A (n < 2)"
-        instead of nan values in the output table.
-        """
-        single_value = [5.0]
-        stats = mod.compute_descriptive_stats(single_value)
-        lines, ci_lo, ci_hi, ci_str = mod._format_stats_single(stats, alpha=0.05)
-
-        # Format into readable table
-        formatted_table = "\n".join(lines)
-
-        # Should show N/A for CI when n < 2
-        self.assertIn("N/A (n < 2)", formatted_table)
-
-        # Returned ci_str should also be "N/A (n < 2)"
-        self.assertEqual(ci_str, "N/A (n < 2)")
-
-        # Should NOT contain nan or NaN strings
-        self.assertNotIn("nan", formatted_table.lower())
-
-        # CI bounds should be infinite
-        self.assertTrue(np.isinf(ci_lo))
-        self.assertTrue(np.isinf(ci_hi))
-
-    def test_generate_single_report_with_n_equals_one(self):
-        """Regression test for generate_single_report with n=1.
-
-        Single data point (n=1) should not crash and should not produce nan
-        values in the output report. CI should display as N/A.
-        """
-        single_value = [5.0]
-        report = mod.generate_single_report(single_value, "Single", alpha=0.05)
-
-        # Should not crash and produce readable output
-        self.assertIsInstance(report, str)
-        self.assertGreater(len(report), 0)
-
-        # Should not contain nan values
-        self.assertNotIn("nan", report.lower())
-
-        # Should indicate insufficient sample size for CI
-        self.assertTrue(
-            "N/A (n < 2)" in report or "95% CI" in report,
-            "Report should reference CI or indicate NA"
-        )
 
     def test_generate_report_zero_diff_higher_is_better_true(self):
         """Regression test for direction_good with zero difference (higher_is_better=True).
@@ -846,54 +783,6 @@ class BenchStatRegressionTests(unittest.TestCase):
         report_regression = mod.generate_report(base, exp_worse, "Base", "Exp",
                                                     higher_is_better=True, alpha=0.05)
         self.assertIn("\u274c Regression", report_regression)
-
-    def test_generate_single_report_ci_formatting_with_n_equals_one(self):
-        """Regression test for CI formatting consistency when n=1 (COSMETIC fix).
-
-        When n=1, the CI bounds are -inf and inf. Both Parametric CI and Summary CI
-        sections should consistently display "N/A (n < 2)" instead of "[-inf, inf]".
-        This ensures cosmetic consistency with _format_stats_single.
-        """
-        single_value = [5.0]
-        report = mod.generate_single_report(single_value, "Single", alpha=0.05)
-
-        # Check that Parametric CI section uses N/A format
-        self.assertIn("Parametric CI:   N/A (n < 2)", report)
-
-        # Check that Summary section uses N/A format
-        self.assertIn("95% CI:    N/A (n < 2) ops/min", report)
-
-        # Ensure no raw [-inf, inf] formatting appears
-        self.assertNotIn("[-inf, inf]", report)
-        self.assertNotIn("[-inf, inf]", report)
-
-    def test_sample_size_analysis_single_with_n_equals_one(self):
-        """Regression test for _sample_size_analysis_single with n=1 (COSMETIC fix).
-
-        When n=1, moe is inf, which causes precision lines to show ±inf and
-        between -inf and inf. Should instead show "Insufficient data (n < 2)".
-        """
-        single_value = [5.0]
-        stats = mod.compute_descriptive_stats(single_value)
-        analysis = mod._sample_size_analysis_single(stats, alpha=0.05)
-
-        # Should show message about insufficient data instead of inf values
-        self.assertIn("Insufficient data (n < 2) to estimate precision", analysis)
-
-        # Precision section should not show raw [ci_lo, ci_hi] with inf bounds
-        # Split on the "Precision of mean estimate:" section
-        lines = analysis.splitlines()
-        precision_start = None
-        for i, line in enumerate(lines):
-            if "Precision of mean estimate:" in line:
-                precision_start = i
-                break
-
-        if precision_start is not None:
-            # Check that precision lines don't have raw between -inf and inf
-            precision_section = '\n'.join(lines[precision_start:precision_start+4])
-            self.assertNotIn("between -inf", precision_section)
-            self.assertNotIn("between inf", precision_section)
 
     def test_sample_size_analysis_single_signature_without_label(self):
         """Regression test: _sample_size_analysis_single no longer accepts label."""
@@ -994,29 +883,6 @@ class BenchStatRegressionTests(unittest.TestCase):
         # Check that p-value visual section exists
         self.assertIn("p-value visual summary", report)
 
-        # With alpha=0.10, should see scale ticks appropriate for 0.00-0.10
-        # Could show 0.02, 0.04, etc. instead of 0.01, 0.02, 0.03, 0.04, 0.05
-
-    def test_generate_single_report_ci_agreement_with_n_equals_1(self):
-        """Regression test for CI agreement check with n=1.
-
-        When n=1, the parametric CI is (-inf, inf) because df=0.
-        The agreement check used to do: abs(boot_lo - (-inf)) <= 0, which
-        produces inf <= 0 = False, reporting misleading "divergence may
-        indicate non-normality". With only one data point, parametric CI
-        is not available (not non-normality). The fix checks for infinite
-        bounds FIRST and reports that parametric CI is not available.
-        """
-        single_value = [5.0]
-        report = mod.generate_single_report(single_value, "Single", alpha=0.05)
-
-        # Should show "Parametric CI not available" message, NOT divergence warning
-        self.assertIn("Parametric CI not available (n < 2)", report)
-        self.assertNotIn("diverge", report)
-        self.assertNotIn("non-normal", report)
-
-        # Should mention bootstrap CI is the only estimate
-        self.assertIn("bootstrap CI is the only estimate", report)
 
     def test_generate_single_report_ci_agreement_with_n_gt_2(self):
         """Regression test for CI agreement check with n>2.
@@ -1592,13 +1458,6 @@ class BenchStatRegressionTests(unittest.TestCase):
         formatted_table = "\n".join(lines)
         self.assertIn(ci_str, formatted_table)
 
-        # Test with n=1 (CI not computable)
-        single_data = [5.0]
-        single_stats = mod.compute_descriptive_stats(single_data)
-        _, _, _, single_ci_str = mod._format_stats_single(single_stats, alpha=0.05)
-
-        self.assertEqual(single_ci_str, "N/A (n < 2)")
-
     def test_generate_single_report_uses_ci_str_from_format_stats(self):
         """Test that generate_single_report reuses ci_str, avoiding duplicate computation.
 
@@ -1854,14 +1713,11 @@ class BenchStatRegressionTests(unittest.TestCase):
         self.assertAlmostEqual(stats['skewness'], expected_skew, places=6)
         self.assertAlmostEqual(stats['ex_kurtosis'], expected_kurt, places=6)
 
-        # Test with n < 3 (skewness should be 0)
-        small_data = [1.0, 2.0]
-        stats_small = mod.compute_descriptive_stats(small_data)
-        self.assertEqual(stats_small['skewness'], 0.0)
-        self.assertEqual(stats_small['ex_kurtosis'], 0.0)
+        # Test with n < 3 should raise ValueError
+        with self.assertRaises(ValueError):
+            mod.compute_descriptive_stats([1.0, 2.0])
 
         # Test with n = 3 (skewness computed, kurtosis = 0)
-        # Use asymmetric data to get non-zero skewness
         three_data = [1.0, 2.0, 5.0]
         stats_three = mod.compute_descriptive_stats(three_data)
         self.assertNotEqual(stats_three['skewness'], 0.0)  # Should compute
@@ -2959,19 +2815,77 @@ class BenchStatRegressionTests(unittest.TestCase):
     # Empty data guard
     # ==================================================================
 
-    def test_empty_data_raises_value_error(self):
-        """Regression test: empty data must raise ValueError, not crash."""
+    def test_insufficient_data_raises_value_error(self):
+        """Regression test: fewer than 3 data points must raise ValueError."""
+        # Empty
         with self.assertRaises(ValueError):
             mod.compute_descriptive_stats([])
-
+        # n=1
         with self.assertRaises(ValueError):
-            mod.generate_single_report([], "Empty")
-
+            mod.compute_descriptive_stats([5.0])
+        # n=2
         with self.assertRaises(ValueError):
-            mod.generate_report([], [1.0, 2.0], "A", "B")
+            mod.compute_descriptive_stats([5.0, 6.0])
+        # n=3 should work
+        mod.compute_descriptive_stats([5.0, 6.0, 7.0])
 
+        # Report functions propagate the error
         with self.assertRaises(ValueError):
-            mod.generate_report([1.0, 2.0], [], "A", "B")
+            mod.generate_single_report([1.0, 2.0], "TooFew")
+        with self.assertRaises(ValueError):
+            mod.generate_report([1.0, 2.0], [3.0, 4.0, 5.0], "A", "B")
+        with self.assertRaises(ValueError):
+            mod.generate_report([3.0, 4.0, 5.0], [1.0, 2.0], "A", "B")
+
+    def test_minimum_n3_produces_valid_stats(self):
+        """Regression test: n=3 is the minimum and produces all valid statistics."""
+        data = [10.0, 20.0, 30.0]
+        stats = mod.compute_descriptive_stats(data)
+
+        self.assertEqual(stats['n'], 3)
+        self.assertAlmostEqual(stats['mean'], 20.0, places=10)
+        self.assertGreater(stats['stdev'], 0)
+        self.assertGreater(stats['se'], 0)
+        # Skewness should be computable at n=3
+        self.assertIsInstance(stats['skewness'], float)
+        # Kurtosis requires n>=4, should be 0 at n=3
+        self.assertEqual(stats['ex_kurtosis'], 0.0)
+
+    def test_minimum_n3_report_has_all_sections(self):
+        """Regression test: n=3 single report includes all sections without errors."""
+        data = [10.0, 20.0, 30.0]
+        report = mod.generate_single_report(data, "MinData")
+
+        # All sections present
+        for section in ["DESCRIPTIVE STATISTICS", "FREQUENCY HISTOGRAM",
+                        "NORMALITY ASSESSMENT", "OUTLIER DETECTION",
+                        "BOOTSTRAP CONFIDENCE INTERVAL", "SAMPLE SIZE ADEQUACY",
+                        "SUMMARY"]:
+            self.assertIn(section, report)
+
+        # No NaN or inf in output
+        self.assertNotIn("nan", report.lower())
+        self.assertNotIn("inf", report.lower())
+
+    def test_minimum_n3_comparison_report_works(self):
+        """Regression test: n=3 comparison report works without errors."""
+        data1 = [10.0, 20.0, 30.0]
+        data2 = [15.0, 25.0, 35.0]
+        report = mod.generate_report(data1, data2, "A", "B")
+
+        self.assertIn("STATISTICAL TESTS", report)
+        self.assertIn("VERDICT", report)
+        # No NaN in output
+        self.assertNotIn("nan", report.lower())
+
+    def test_n4_enables_kurtosis(self):
+        """Regression test: n=4 enables kurtosis computation."""
+        data = [1.0, 2.0, 10.0, 11.0]
+        stats = mod.compute_descriptive_stats(data)
+        # With n=4, kurtosis should be computed (non-zero for non-normal data)
+        self.assertIsInstance(stats['ex_kurtosis'], float)
+        # This bimodal-ish data should have negative kurtosis
+        self.assertNotEqual(stats['ex_kurtosis'], 0.0)
 
 
 # =============================================================================

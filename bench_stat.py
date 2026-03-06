@@ -97,44 +97,31 @@ def compute_descriptive_stats(data):
     Returns a dict with: n, mean, var, stdev, se, median, min, max, range,
     p25, p75, iqr, skewness, ex_kurtosis.
 
-    Uses scipy.stats.describe for optimized single-pass computation of
-    nobs, min, max, mean, and variance.
+    Requires at least 3 data points. Uses scipy.stats.describe for optimized
+    single-pass computation of nobs, min, max, mean, and variance.
     """
     arr = np.asarray(data)
-    if arr.size == 0:
-        raise ValueError("data must not be empty")
-    # Suppress expected warnings for edge cases (n <= 1 with ddof=1)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", RuntimeWarning)
-        desc = sp_stats.describe(arr)
+    if arr.size < 3:
+        raise ValueError("data must contain at least 3 values")
 
-    # Extract core statistics from scipy.stats.describe (single pass)
+    desc = sp_stats.describe(arr)
+
     n = desc.nobs
     m = float(desc.mean)
-
-    # Handle n <= 1 case where variance is undefined (ddof=1)
-    if n <= 1:
-        var_ = 0.0
-        sd = 0.0
-    else:
-        var_ = float(desc.variance)  # ddof=1 by default
-        sd = math.sqrt(var_)
-
-    se = sd / math.sqrt(n) if n > 0 else 0.0
+    var_ = float(desc.variance)  # ddof=1 by default
+    sd = math.sqrt(var_)
+    se = sd / math.sqrt(n)
     data_min, data_max = float(desc.minmax[0]), float(desc.minmax[1])
 
-    # Compute percentiles and median
     med = float(np.median(arr))
     p25 = float(np.percentile(arr, 25))
     p75 = float(np.percentile(arr, 75))
 
-    # Derive unbiased skewness/kurtosis from desc (biased) to avoid extra passes
-    sk = 0.0
-    if n >= 3:
-        biased_sk = float(desc.skewness)
-        if not np.isnan(biased_sk):
-            sk = biased_sk * math.sqrt(n * (n - 1)) / (n - 2)
+    # Derive unbiased skewness from desc (biased); always valid for n >= 3
+    biased_sk = float(desc.skewness)
+    sk = biased_sk * math.sqrt(n * (n - 1)) / (n - 2) if not np.isnan(biased_sk) else 0.0
 
+    # Derive unbiased kurtosis from desc (biased); requires n >= 4
     ek = 0.0
     if n >= 4:
         biased_ek = float(desc.kurtosis)
@@ -165,8 +152,6 @@ def compute_descriptive_stats(data):
 
 def _margin_of_error_from_se(se, alpha, df):
     """Compute margin of error from standard error and degrees of freedom."""
-    if df < 1:
-        return float('inf')
     t_crit_val = _t_critical(alpha, df)
     return t_crit_val * se
 
@@ -185,16 +170,8 @@ def _format_stats_single(stats, alpha):
     m = stats['mean']
     se = stats['se']
     moe = _margin_of_error_from_se(se, alpha, n - 1)
-    if math.isinf(moe):
-        ci_lo, ci_hi = float('-inf'), float('inf')
-    else:
-        ci_lo, ci_hi = m - moe, m + moe
-
-    # Format CI: show N/A if df < 1 (n < 2)
-    if math.isinf(ci_lo) or math.isinf(ci_hi):
-        ci_str = "N/A (n < 2)"
-    else:
-        ci_str = "[{:.2f}, {:.2f}]".format(ci_lo, ci_hi)
+    ci_lo, ci_hi = m - moe, m + moe
+    ci_str = "[{:.2f}, {:.2f}]".format(ci_lo, ci_hi)
 
     rows = [
         ("n", str(n)),
@@ -562,10 +539,7 @@ def _sample_size_analysis_single(stats, alpha=0.05, moe=None, ci_lo=None, ci_hi=
     s = stats['stdev']
     se = stats['se']
     if moe is None:
-        if n < 2:
-            moe = float('inf')
-        else:
-            moe = _margin_of_error_from_se(se, alpha, n - 1)
+        moe = _margin_of_error_from_se(se, alpha, n - 1)
     if m != 0:
         moe_pct = 100.0 * moe / abs(m)
     else:
@@ -588,11 +562,8 @@ def _sample_size_analysis_single(stats, alpha=0.05, moe=None, ci_lo=None, ci_hi=
     lines.append("")
 
     lines.append("  Precision of mean estimate:")
-    if math.isinf(moe):
-        lines.append("    Insufficient data (n < 2) to estimate precision")
-    else:
-        lines.append("    True mean is within \u00b1{:.2f} of {:.2f}".format(moe, m))
-        lines.append("    i.e., between {:.2f} and {:.2f}".format(ci_lo, ci_hi))
+    lines.append("    True mean is within \u00b1{:.2f} of {:.2f}".format(moe, m))
+    lines.append("    i.e., between {:.2f} and {:.2f}".format(ci_lo, ci_hi))
     lines.append("    with {:.0f}% confidence".format(100 * (1 - alpha)))
     lines.append("")
 
@@ -752,8 +723,6 @@ def _sample_size_analysis_comparison(stats_base, stats_exp,
 
 def _t_critical(alpha, df):
     """t critical value for two-tailed CI using scipy.stats.t.ppf."""
-    if df < 1:
-        return float('inf')
     return float(abs(sp_stats.t.ppf(alpha / 2, df)))
 
 
@@ -768,10 +737,6 @@ def welch_t_test(data1, data2):
     Tests whether data2 is significantly different from data1.
     t_stat > 0 means data2 > data1 on average.
     """
-    n1, n2 = len(data1), len(data2)
-    if n1 < 2 or n2 < 2:
-        return 0, n1 + n2 - 2, 1.0
-
     arr1 = np.asarray(data1)
     arr2 = np.asarray(data2)
 
@@ -784,7 +749,7 @@ def welch_t_test(data1, data2):
     # Handle NaN from zero-variance edge cases (both groups constant)
     if math.isnan(t_stat) or math.isnan(df):
         mean_diff = float(arr2.mean()) - float(arr1.mean())
-        df = float(n1 + n2 - 2)
+        df = float(len(data1) + len(data2) - 2)
         if mean_diff != 0:
             t_stat = float('inf') if mean_diff > 0 else float('-inf')
             p_two = 0.0
@@ -910,14 +875,13 @@ def bootstrap_single_ci(data, n_boot=10000, ci=95, seed=42):
 
     Uses scipy.stats.bootstrap with BCa (bias-corrected and accelerated) method
     for better coverage on skewed distributions.
-    Falls back to percentile method for constant data where BCa is undefined.
+    Falls back for constant data where BCa is undefined.
     """
     data_arr = np.asarray(data)
-    n = len(data_arr)
     m = float(data_arr.mean())
 
-    # BCa requires n >= 2 and non-constant data
-    if n < 2 or np.ptp(data_arr) == 0:
+    # BCa requires non-constant data
+    if np.ptp(data_arr) == 0:
         return m, m
 
     confidence_level = ci / 100.0
@@ -927,8 +891,6 @@ def bootstrap_single_ci(data, n_boot=10000, ci=95, seed=42):
         rng=np.random.default_rng(seed))
 
     return float(result.confidence_interval.low), float(result.confidence_interval.high)
-
-
 
 
 def dagostino_pearson_test(data):
@@ -1553,8 +1515,6 @@ def _append_report_section(report, title):
 
 def generate_single_report(data, label, higher_is_better=True, alpha=0.05):
     """Generate analysis report for a single experiment."""
-    if not data:
-        raise ValueError("data must not be empty")
     report = []
     stats = compute_descriptive_stats(data)
 
@@ -1570,7 +1530,6 @@ def generate_single_report(data, label, higher_is_better=True, alpha=0.05):
     _append_report_section(report, "DESCRIPTIVE STATISTICS")
 
     stat_lines, ci_lo, ci_hi, ci_fmt = _format_stats_single(stats, alpha)
-    ci_valid = not (math.isinf(ci_lo) or math.isinf(ci_hi))
     report.extend(stat_lines)
     report.append("")
 
@@ -1637,29 +1596,21 @@ def generate_single_report(data, label, higher_is_better=True, alpha=0.05):
     report.append(
         "  Parametric CI:   {}".format(ci_fmt))
     report.append("")
-    if not ci_valid:
+    agreement = abs(boot_lo - ci_lo) <= se and abs(boot_hi - ci_hi) <= se
+    if agreement:
         report.append(
-            "  \u26a0\ufe0f  Parametric CI not available (n < 2) "
-            "\u2014 bootstrap CI is the only estimate")
+            "  \u2705 Bootstrap and parametric CIs agree "
+            "\u2014 estimates are reliable")
     else:
-        agreement = abs(boot_lo - ci_lo) <= se and abs(boot_hi - ci_hi) <= se
-        if agreement:
-            report.append(
-                "  \u2705 Bootstrap and parametric CIs agree "
-                "\u2014 estimates are reliable")
-        else:
-            report.append(
-                "  \u26a0\ufe0f  Bootstrap and parametric CIs diverge \u2014 "
-                "distribution may be non-normal")
+        report.append(
+            "  \u26a0\ufe0f  Bootstrap and parametric CIs diverge \u2014 "
+            "distribution may be non-normal")
     report.append("")
 
     # -- Sample Size --
     _append_report_section(report, "SAMPLE SIZE ADEQUACY")
     # Reuse already computed parametric CI to avoid redoing t-critical × SE work.
-    if not ci_valid:
-        moe = float('inf')
-    else:
-        moe = abs(ci_hi - m)
+    moe = abs(ci_hi - m)
     report.append(_sample_size_analysis_single(
         stats, alpha, moe=moe, ci_lo=ci_lo, ci_hi=ci_hi))
 
@@ -1772,10 +1723,6 @@ def _compute_p_value_scale_info(alpha, max_p=0.0):
 def generate_report(data_base, data_exp, label_base, label_exp,
                     higher_is_better=True, alpha=0.05):
     """Generate the full comparison report."""
-    if not data_base:
-        raise ValueError("data_base must not be empty")
-    if not data_exp:
-        raise ValueError("data_exp must not be empty")
     report = []
     stats_base = compute_descriptive_stats(data_base)
     stats_exp = compute_descriptive_stats(data_exp)
@@ -2080,8 +2027,9 @@ Examples:
     higher_is_better = not args.lower_is_better
 
     data_base = load_csv(args.baseline)
-    if not data_base:
-        print("Error: No data loaded from {}".format(args.baseline),
+    if len(data_base) < 3:
+        print("Error: Need at least 3 data points in {} (got {})".format(
+            args.baseline, len(data_base)),
               file=sys.stderr)
         sys.exit(1)
 
@@ -2097,8 +2045,9 @@ Examples:
     else:
         # -- Two experiment comparison --
         data_exp = load_csv(args.experiment)
-        if not data_exp:
-            print("Error: No data loaded from {}".format(args.experiment),
+        if len(data_exp) < 3:
+            print("Error: Need at least 3 data points in {} (got {})".format(
+                args.experiment, len(data_exp)),
                   file=sys.stderr)
             sys.exit(1)
 

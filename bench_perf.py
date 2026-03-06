@@ -112,7 +112,7 @@ def benchmark_generate_single_report():
     _print_header("generate_single_report()")
 
     cases = [
-        ("Tiny (n=1)", [5.0]),
+        ("Tiny (n=5)", [1.0, 2.0, 3.0, 4.0, 5.0]),
         ("Small (n=10)", list(range(1, 11))),
         ("Medium (n=100)", list(range(1, 101))),
         ("Large (n=1000)", list(range(1, 1001))),
