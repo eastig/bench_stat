@@ -16,6 +16,17 @@ from scipy import stats as sp_stats
 import bench_stat as mod
 
 
+def _ignore_precision_loss(func):
+    """Decorator: allow scipy's 'Precision loss' RuntimeWarning in this test."""
+    def wrapper(self, *args, **kwargs):
+        warnings.filterwarnings("ignore", message="Precision loss",
+                                category=RuntimeWarning)
+        return func(self, *args, **kwargs)
+    wrapper.__name__ = func.__name__
+    wrapper.__doc__ = func.__doc__
+    return wrapper
+
+
 # =============================================================================
 # Reference implementations for independent verification (not production code)
 # =============================================================================
@@ -51,13 +62,10 @@ def _ref_confidence_interval(m, se, alpha, df):
 class BenchStatRegressionTests(unittest.TestCase):
 
     def setUp(self):
-        # Turn warnings into errors, except the expected scipy precision-loss
-        # warning from constant/near-identical test data
+        # Turn all warnings into errors so unexpected warnings fail the test
         self._warn_ctx = warnings.catch_warnings()
         self._warn_ctx.__enter__()
         warnings.simplefilter("error")
-        warnings.filterwarnings("ignore", message="Precision loss",
-                                category=RuntimeWarning)
 
     def tearDown(self):
         self._warn_ctx.__exit__(None, None, None)
@@ -208,6 +216,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         stats = mod.compute_descriptive_stats([1.0, 2.0, 3.0])
         self.assertEqual(stats['n'], 3)
 
+    @_ignore_precision_loss
     def test_welch_t_test_with_zero_variance_samples(self):
         """Regression test for welch_t_test 0/0 df computation.
 
@@ -239,6 +248,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         expected_p_two = 2 * sp_stats.t.sf(abs(t_stat), df)
         self.assertAlmostEqual(p_two, expected_p_two, places=10)
 
+    @_ignore_precision_loss
     def test_generate_report_with_zero_baseline_mean(self):
         """Regression test for generate_report baseline mean division by zero.
 
@@ -277,6 +287,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         self.assertIn("N/A (mean=0)", table)
         self.assertNotIn("Need inf more", table)
 
+    @_ignore_precision_loss
     def test_sample_size_analysis_comparison_with_zero_baseline_mean(self):
         """Regression test for comparison analysis when baseline mean is zero."""
         stats_base = mod.compute_descriptive_stats([0.0, 0.0, 0.0])
@@ -485,6 +496,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         self.assertNotIn("CV:        inf%", report)
         self.assertNotIn("High variability", report)
 
+    @_ignore_precision_loss
     def test_generate_report_diff_pct_with_zero_baseline(self):
         """Regression test for generate_report diff_pct formatting with zero baseline mean.
 
@@ -521,6 +533,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         self.assertGreater(result, 0.0)
         self.assertLess(result, 10.0)
 
+    @_ignore_precision_loss
     def test_cohens_d_with_zero_variance(self):
         """Regression test for Cohen's d with zero pooled standard deviation.
 
@@ -608,6 +621,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         self.assertAlmostEqual(outliers[0][0], 500.0, places=5)
         self.assertGreater(abs(outliers[0][1]), 3.0)
 
+    @_ignore_precision_loss
     def test_detect_outliers_zscore_zero_stdev(self):
         """Test z-score outlier detection with zero standard deviation."""
         # All values identical
@@ -714,6 +728,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         # Should be sorted
         self.assertEqual(outliers, sorted(outliers))
 
+    @_ignore_precision_loss
     def test_generate_single_report_ci_agreement_with_zero_se(self):
         """Regression test for CI agreement check with se=0.
 
@@ -736,6 +751,7 @@ class BenchStatRegressionTests(unittest.TestCase):
 
 
 
+    @_ignore_precision_loss
     def test_generate_report_zero_diff_higher_is_better_true(self):
         """Regression test for direction_good with zero difference (higher_is_better=True).
 
@@ -757,6 +773,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         improvement_lines = [line for line in report.splitlines() if "\u2705 Improvement" in line]
         self.assertEqual(len(improvement_lines), 0, "Should not report Improvement for zero difference")
 
+    @_ignore_precision_loss
     def test_generate_report_zero_diff_higher_is_better_false(self):
         """Regression test for direction_good with zero difference (higher_is_better=False).
 
@@ -778,6 +795,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         improvement_lines = [line for line in report.splitlines() if "\u2705 Improvement" in line]
         self.assertEqual(len(improvement_lines), 0, "Should not report Improvement for zero difference")
 
+    @_ignore_precision_loss
     def test_generate_report_nonzero_diff_consistency(self):
         """Regression test for direction_good with non-zero difference.
 
@@ -809,6 +827,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             mod._sample_size_analysis_single(stats, "Single", 0.05)
 
+    @_ignore_precision_loss
     def test_sample_size_analysis_single_req_1pct_conditional(self):
         """Testing that req_1pct is only computed when moe_pct > 2.0 (low/poor precision).
 
@@ -1151,6 +1170,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         self.assertEqual(d_raw, d_stats,
                         "Cohen's d must be identical with/without precomputed stats")
 
+    @_ignore_precision_loss
     def test_cohens_d_uses_precomputed_variances_when_stats_provided(self):
         """Regression test: _pooled_stdev_from_params uses precomputed variances correctly."""
         data1 = [10.0, 10.0, 10.0, 10.0]
@@ -1690,6 +1710,7 @@ class BenchStatRegressionTests(unittest.TestCase):
         finally:
             Path(tmp_path).unlink()
 
+    @_ignore_precision_loss
     def test_compute_descriptive_stats_with_scipy_describe(self):
         """Test that compute_descriptive_stats uses scipy.stats.describe optimization.
 
@@ -2924,8 +2945,6 @@ class ReferenceDataRegressionTests(unittest.TestCase):
         self._warn_ctx = warnings.catch_warnings()
         self._warn_ctx.__enter__()
         warnings.simplefilter("error")
-        warnings.filterwarnings("ignore", message="Precision loss",
-                                category=RuntimeWarning)
 
     def tearDown(self):
         self._warn_ctx.__exit__(None, None, None)
