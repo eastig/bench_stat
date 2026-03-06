@@ -51,10 +51,13 @@ def _ref_confidence_interval(m, se, alpha, df):
 class BenchStatRegressionTests(unittest.TestCase):
 
     def setUp(self):
-        # Suppress expected scipy RuntimeWarnings from constant/near-identical test data
+        # Turn warnings into errors, except the expected scipy precision-loss
+        # warning from constant/near-identical test data
         self._warn_ctx = warnings.catch_warnings()
         self._warn_ctx.__enter__()
-        warnings.simplefilter("ignore", RuntimeWarning)
+        warnings.simplefilter("error")
+        warnings.filterwarnings("ignore", message="Precision loss",
+                                category=RuntimeWarning)
 
     def tearDown(self):
         self._warn_ctx.__exit__(None, None, None)
@@ -2920,7 +2923,9 @@ class ReferenceDataRegressionTests(unittest.TestCase):
     def setUp(self):
         self._warn_ctx = warnings.catch_warnings()
         self._warn_ctx.__enter__()
-        warnings.simplefilter("ignore", RuntimeWarning)
+        warnings.simplefilter("error")
+        warnings.filterwarnings("ignore", message="Precision loss",
+                                category=RuntimeWarning)
 
     def tearDown(self):
         self._warn_ctx.__exit__(None, None, None)
