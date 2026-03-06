@@ -7,6 +7,7 @@ import random
 import re
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -48,6 +49,15 @@ def _ref_confidence_interval(m, se, alpha, df):
 
 
 class BenchStatRegressionTests(unittest.TestCase):
+
+    def setUp(self):
+        # Suppress expected scipy RuntimeWarnings from constant/near-identical test data
+        self._warn_ctx = warnings.catch_warnings()
+        self._warn_ctx.__enter__()
+        warnings.simplefilter("ignore", RuntimeWarning)
+
+    def tearDown(self):
+        self._warn_ctx.__exit__(None, None, None)
 
     def test_one_tailed_p_values_respect_direction(self):
         base = [100, 101, 99, 100, 102, 98, 101, 100]
@@ -2906,6 +2916,14 @@ class ReferenceDataRegressionTests(unittest.TestCase):
         cls.fix = np.genfromtxt("test_data/crypto.aes.fix.csv").tolist()
         cls.op1 = np.genfromtxt("test_data/crypto.aes.fix.op1.csv").tolist()
         cls.op2 = np.genfromtxt("test_data/crypto.aes.fix.op2.csv").tolist()
+
+    def setUp(self):
+        self._warn_ctx = warnings.catch_warnings()
+        self._warn_ctx.__enter__()
+        warnings.simplefilter("ignore", RuntimeWarning)
+
+    def tearDown(self):
+        self._warn_ctx.__exit__(None, None, None)
 
     def _check_descriptive_stats(self, data, ref):
         """Verify descriptive stats match reference values."""
